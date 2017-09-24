@@ -10,46 +10,36 @@ const createFigure = (x = 0, y = 0, width = 10, height = 10) => ({
 });
 
 const createPainter = (ctx) => ({
-  prevPosition: { x: null, y: null },
   context: ctx,
   clearPrevPosition() {
     this.context.clearRect(
-      this.prevPosition.x,
-      this.prevPosition.y,
+      this.x,
+      this.y,
       this.width,
-      this.height
+      this.height,
     );
   },
   paint(...args) {
     this.clearPrevPosition()
+
     const { newX, newY } = this.getNewPosition(...args);
 
     this.context.fillRect(newX, newY, this.width, this.height);
 
-    this.prevPosition = { x: newX, y: newY };
+    this.x = newX;
+    this.y = newY;
   },
   init() {
-    const { x, y } = this.getInitialPosition();
-
-    this.context.fillRect(x, y, this.width, this.height);
-
-    this.prevPosition = { x, y };
+    this.context.fillRect(this.x, this.y, this.width, this.height);
   }
 });
 
 const createCart = (ctx) => {
   const proto = {
-    x: 0,
-    y: 300,
-    width: 20,
-    height: 90,
-    getInitialPosition() {
-      return { x: this.x, y: this.y };
-    },
     getNewPosition(x, y) {
-      this.y = y - this.height / 2;
+      const newY = y - this.height / 2;
 
-      return { newX: this.x, newY: this.y };
+      return { newX: this.x, newY };
     },
   };
 
@@ -64,12 +54,6 @@ const createBall = (ctx) => {
   const proto = {
     vx: 8,
     vy: 5,
-    getInitialPosition() {
-      return {
-        x: this.context.canvas.offsetWidth / 2,
-        y: this.context.canvas.offsetHeight / 2,
-      };
-    },
     // Handle only cross by x axis
     crossesModels(models) {
       let isCrosses = false;
@@ -132,11 +116,8 @@ const createBall = (ctx) => {
         this.vx = -this.vx;
       }
 
-      this.x = this.x + this.vx;
-      this.y = this.y + this.vy;
-
-      let newX = this.x;
-      let newY = this.y;
+      const newX = this.x + this.vx;
+      const newY = this.y + this.vy;
 
       return { newX, newY };
     },
@@ -145,9 +126,14 @@ const createBall = (ctx) => {
   return Object.create(Object.assign(
     proto,
     createPainter(ctx),
-    createFigure(500, 400, 9, 9)),
-  );
-}
+    createFigure(
+      Math.round(document.body.offsetWidth / 2),
+      Math.round(document.body.offsetHeight / 2),
+      9,
+      9,
+    ),
+  ));
+};
 
 const loopCreator = (ball, ...models) => {
   return function loop() {
@@ -155,7 +141,7 @@ const loopCreator = (ball, ...models) => {
 
     window.requestAnimationFrame(loop);
   };
-}
+};
 
 
 const createCanvas = () => {
