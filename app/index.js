@@ -1,5 +1,14 @@
 import './index.css';
 
+const createFigure = (x = 0, y = 0, width = 10, height = 10) => ({
+  x,
+  y,
+  width,
+  height,
+  getRightX() { return this.x + this.width; },
+  getCenterY() { return this.y + this.height / 2; },
+});
+
 const createPainter = (ctx) => ({
   prevPosition: { x: null, y: null },
   context: ctx,
@@ -11,9 +20,9 @@ const createPainter = (ctx) => ({
       this.height
     );
   },
-  paint(x, y) {
+  paint(...args) {
     this.clearPrevPosition()
-    const { newX, newY } = this.getNewPosition(x, y);
+    const { newX, newY } = this.getNewPosition(...args);
 
     this.context.fillRect(newX, newY, this.width, this.height);
 
@@ -38,34 +47,88 @@ const createCart = (ctx) => {
       return { x: this.x, y: this.y };
     },
     getNewPosition(x, y) {
-      const newYPosition =  y - this.height / 2;
+      this.y = y - this.height / 2;
 
-      return { newX: this.x, newY: newYPosition };
+      return { newX: this.x, newY: this.y };
     },
   };
 
-  return Object.create(Object.assign(proto, createPainter(ctx)));
+  return Object.create(Object.assign(
+    proto,
+    createPainter(ctx),
+    createFigure(0, 300, 20, 90),
+  ));
 }
 
 const createBall = (ctx) => {
   const proto = {
-    x: 500,
-    y: 400,
-    vx: 5,
-    vy: 2,
-    width: 9,
-    height: 9,
+    vx: 8,
+    vy: 5,
     getInitialPosition() {
-      return { x: this.x, y: this.y };
+      return {
+        x: this.context.canvas.offsetWidth / 2,
+        y: this.context.canvas.offsetHeight / 2,
+      };
     },
-    crossesX() { return this.x <= 0 || this.x >= this.context.canvas.offsetWidth },
-    crossesY() { return this.y <= 0 || this.y >= this.context.canvas.offsetHeight },
-    getNewPosition() {
-      if (this.crossesY()) {
+    // Handle only cross by x axis
+    crossesModels(models) {
+      let isCrosses = false;
+      const leftXPosition = this.x;
+      const rightXPosition = this.getRightX();
+      const ballCenter = this.getCenterY();
+
+      models.forEach(model => {
+        const rightModelXPosition = model.getRightX();
+        const leftModelXPosition = model.x;
+        const topModelYPosition = model.y;
+        const bottomModelYPosition = model.y + model.height;
+
+        if (
+          ((
+            leftXPosition >= leftModelXPosition
+            && leftXPosition <= rightModelXPosition
+          ) ||
+          (
+            rightXPosition >= leftModelXPosition
+            && rightXPosition <= rightModelXPosition
+          ))
+            &&
+            (
+              ballCenter <= bottomModelYPosition
+              && ballCenter >= topModelYPosition
+            )
+        ) {
+          isCrosses = true;
+          return;
+        }
+      });
+
+      return isCrosses;
+    },
+    crossesCanvas() {
+        if (this.x <= 0 || this.x >= this.context.canvas.offsetWidth) {
+          return 'x';
+        }
+
+        if (this.y <= 0 || this.y >= this.context.canvas.offsetHeight) {
+          return 'y';
+        }
+
+        return false;
+    },
+    getNewPosition(models) {
+      const isCrossesCanvas = this.crossesCanvas();
+      const isCrossesModels = this.crossesModels(models)
+
+      if (isCrossesCanvas === 'x') {
+        this.vx = -this.vx;
+      }
+
+      if (isCrossesCanvas === 'y') {
         this.vy = -this.vy;
       }
 
-      if (this.crossesX()) {
+      if (isCrossesModels) {
         this.vx = -this.vx;
       }
 
@@ -79,12 +142,16 @@ const createBall = (ctx) => {
     },
   };
 
-  return Object.create(Object.assign(proto, createPainter(ctx)));
+  return Object.create(Object.assign(
+    proto,
+    createPainter(ctx),
+    createFigure(500, 400, 9, 9)),
+  );
 }
 
-const loopCreator = (ball) => {
+const loopCreator = (ball, ...models) => {
   return function loop() {
-    ball.paint();
+    ball.paint(models);
 
     window.requestAnimationFrame(loop);
   };
@@ -94,8 +161,8 @@ const loopCreator = (ball) => {
 const createCanvas = () => {
   const canvas = document.createElement('canvas');
 
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = document.body.offsetWidth;
+  canvas.height = document.body.offsetHeight;
 
   document.body.append(canvas);
 
@@ -120,7 +187,7 @@ const initializeApp = () => {
     playerCart.paint(event.x, event.y);
   });
 
-  const loop = loopCreator(ball);
+  const loop = loopCreator(ball, playerCart);
   loop();
 }
 
