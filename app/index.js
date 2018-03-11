@@ -1,180 +1,107 @@
 import './index.css';
 
-const createFigure = (x = 0, y = 0, width = 10, height = 10) => ({
-  x,
-  y,
-  width,
-  height,
-  getRightX() { return this.x + this.width; },
-  getCenterY() { return this.y + this.height / 2; },
-});
+import createCanvas from './canvas';
+import figure from './figure';
+import painter from './painter';
+import collider from './collider';
 
-const createPainter = (ctx) => ({
-  context: ctx,
-  clearPrevPosition() {
-    this.context.clearRect(
-      this.x,
-      this.y,
-      this.width,
-      this.height,
-    );
-  },
-  paint(...args) {
-    this.clearPrevPosition()
+const ball = ({ x, y, ctx }) => Object.assign(
+    {
+      vx: -2, // 8
+      vy: 1, // 5
 
-    const { newX, newY } = this.getNewPosition(...args);
+      collideModels(models) {
+        for (let model of models) {
+          const nextX = this.x + this.vx;
+          const nextY = this.y + this.vy;
 
-    this.context.fillRect(newX, newY, this.width, this.height);
+          return this.collideModel(nextX, nextY, model);
+        }
+      },
 
-    this.x = newX;
-    this.y = newY;
-  },
-  init() {
-    this.context.fillRect(this.x, this.y, this.width, this.height);
-  }
-});
-
-const createCart = (ctx) => {
-  const proto = {
-    getNewPosition(x, y) {
-      const newY = y - this.height / 2;
-
-      return { newX: this.x, newY };
-    },
-  };
-
-  return Object.create(Object.assign(
-    proto,
-    createPainter(ctx),
-    createFigure(0, 300, 20, 90),
-  ));
-}
-
-const createBall = (ctx) => {
-  const proto = {
-    vx: 8,
-    vy: 5,
-    // Handle only cross by x axis
-    crossesModels(models) {
-      let isCrosses = false;
-      const leftXPosition = this.x;
-      const rightXPosition = this.getRightX();
-      const ballCenter = this.getCenterY();
-
-      models.forEach(model => {
-        const rightModelXPosition = model.getRightX();
-        const leftModelXPosition = model.x;
-        const topModelYPosition = model.y;
-        const bottomModelYPosition = model.y + model.height;
+      calcNewPosition(models) {
+        const doesCollideModels = this.collideModels(models);
 
         if (
-          ((
-            leftXPosition >= leftModelXPosition
-            && leftXPosition <= rightModelXPosition
-          ) ||
-          (
-            rightXPosition >= leftModelXPosition
-            && rightXPosition <= rightModelXPosition
-          ))
-            &&
-            (
-              ballCenter <= bottomModelYPosition
-              && ballCenter >= topModelYPosition
-            )
+          doesCollideModels === this._sides.bottom
+          || doesCollideModels === this._sides.top
         ) {
-          isCrosses = true;
-          return;
+          this.vy = -this.vy;
+        } else if (
+          doesCollideModels === this._sides.left
+          || doesCollideModels === this._sides.right
+        ) {
+          this.vx = -this.vx;
+        } else {
+          const doesCrossCanvas = this.collideCanvas();
+
+          if (doesCrossCanvas == 'x') {
+            this.vx = -this.vx;
+          } else if (doesCrossCanvas == 'y') {
+            this.vy = -this.vy;
+          }
         }
-      });
 
-      return isCrosses;
+        this.x += this.vx;
+        this.y += this.vy;
+      },
+
+      update(models) {
+        this.reset();
+        this.calcNewPosition(models);
+        this.paint();
+      },
     },
-    crossesCanvas() {
-        if (this.x <= 0 || this.x >= this.context.canvas.offsetWidth) {
-          return 'x';
-        }
+    collider(),
+    figure({ x, y, width: 10, height: 10 }),
+    painter(ctx),
+  );
 
-        if (this.y <= 0 || this.y >= this.context.canvas.offsetHeight) {
-          return 'y';
-        }
+const player = ({ ctx }) => {
+  const me = Object.assign(
+    {
+      repaint(y) {
+        this.reset();
 
-        return false;
+        this.y = y - this.height / 2;
+
+        this.paint();
+      },
+      update() {
+        this.paint();
+      },
     },
-    getNewPosition(models) {
-      const isCrossesCanvas = this.crossesCanvas();
-      const isCrossesModels = this.crossesModels(models)
+    figure({ x: 0, y: 300, width: 20, height: 90 }),
+    painter(ctx),
+  );
 
-      if (isCrossesCanvas === 'x') {
-        this.vx = -this.vx;
-      }
+  window.addEventListener('mousemove', (event) => {
+    me.repaint(event.y);
+  });
 
-      if (isCrossesCanvas === 'y') {
-        this.vy = -this.vy;
-      }
-
-      if (isCrossesModels) {
-        this.vx = -this.vx;
-      }
-
-      const newX = this.x + this.vx;
-      const newY = this.y + this.vy;
-
-      return { newX, newY };
-    },
-  };
-
-  return Object.create(Object.assign(
-    proto,
-    createPainter(ctx),
-    createFigure(
-      Math.round(document.body.offsetWidth / 2),
-      Math.round(document.body.offsetHeight / 2),
-      9,
-      9,
-    ),
-  ));
+  return me;
 };
 
-const loopCreator = (ball, ...models) => {
-  return function loop() {
-    ball.paint(models);
+const loop = models => () => {
+  models.forEach(model => model.update(models.filter(m => m != model)));
 
-    window.requestAnimationFrame(loop);
-  };
+  window.requestAnimationFrame(loop(models));
 };
-
-
-const createCanvas = () => {
-  const canvas = document.createElement('canvas');
-
-  canvas.width = document.body.offsetWidth;
-  canvas.height = document.body.offsetHeight;
-
-  document.body.append(canvas);
-
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'black';
-
-  return {
-    canvas,
-    ctx,
-  };
-}
 
 const initializeApp = () => {
   const { canvas, ctx } = createCanvas();
-  const playerCart = createCart(ctx);
-  playerCart.init();
 
-  const ball = createBall(ctx);
-  ball.init()
+  const models = [];
+  models.push(
+    ball({
+      x: Math.floor(canvas.height / 2),
+      y: Math.floor(canvas.width / 2),
+      ctx,
+    }),
+    player({ ctx }),
+  );
 
-  window.addEventListener('mousemove', (event) => {
-    playerCart.paint(event.x, event.y);
-  });
-
-  const loop = loopCreator(ball, playerCart);
-  loop();
+  window.requestAnimationFrame(loop(models));
 }
 
 initializeApp();
