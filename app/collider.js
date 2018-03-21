@@ -7,38 +7,44 @@ const collider = () => ({
   },
 
   calcCollisionSide(x, y, model) {
-    // TODO: находить ближайшую сторону, с которой происходит столкновение
-    const fromRight = {
-      toModelRight: (x + this.width)  - (model.x + model.width),
-      toModelLeft: (x + this.width) - model.x,
+    // NOTE: that does not work. we should't calculate distances
+    // depending on model center... 
+    const sides = {
+      right: [x + this.width, y + this.height / 2],
+      left: [x, y + this.height / 2],
+      top: [x + this.width / 2, y],
+      bottom: [x + this.width / 2, y + this.height],
     };
 
-    const fromLeft = {
-      toModelRight: x - (model.x + model.width),
-      toModelLeft: x - model.x,
-    };
+    const modelCenter = [
+      model.x + model.width / 2,
+      model.y + model.height / 2,
+    ];
 
-    const map = {
-      [this._sides.left]: x - (model.x + model.width),
-      [this._sides.right]: (x + this.width) - model.x,
-      [this._sides.bottom]: (y + this.height) - model.y,
-      [this._sides.top]: y - (model.y + model.height),
-    };
+    const minDistances = Object.keys(sides)
+      .reduce((min, sideName) => {
+        const side = sides[sideName];
 
-    let min = map[this._sides.right];
-    let minKey = this._sides.right;
+        const distance = Math.sqrt(
+          (Math.abs(modelCenter[0] - side[0]) ** 2)
+          + (Math.abs(modelCenter[1] - side[1]) ** 2)
+        );
 
-    for (let key in map) {
-      if (map[key] < min) {
-        min = map[key];
-        minKey = key;
-      }
-    }
+        if (!min.distance || distance > min.distance) {
+          min.distance = distance;
+          min.side = sideName;
+        }
 
-    return minKey;
+        return min;
+      }, {});
+
+    return this._sides[minDistances.side];
   },
 
   collideModel(x, y, model) {
+    /*
+     if bottom or top side of model collide another model
+     */
     if (
       (x <= model.x + model.width
       && x + this.width >= model.x
@@ -57,7 +63,7 @@ const collider = () => ({
   },
 
   collideCanvas() {
-    if (this.x <= 0 || this.x >= this.ctx.canvas.offsetWidth) {
+    if (this.x <= 0 || this.x >= this.ctx.canvas.offsetWidth / 3) {
       return 'x';
     }
 
